@@ -1,6 +1,7 @@
 const net = require('net');
 const crypto = require('crypto');
 const crypto1 = require('crypto-js');
+const { ethers, run, network } = require("hardhat")
 
 class FuzzyExtractor {
 
@@ -143,37 +144,40 @@ class FuzzyExtractor {
         this.publicHelper = publicHelper;
     }
 }
-class Client {
+class Administrator {
     constructor() {
         this.PORT = 1000;
-        this.ID = "USER1";
+        this.ID = "";
         this.mode = "";
-        this.TH2 = "";
+        this.challenge="";
+        this.response="";
         this.CA = "";
-        this.PI = "";
-        this.GS = "";
-        this.initializeClient();
+        this.TH3 = "";
+        this.TH4="";
+        this.initializeAdministrator();
     }
 
-    initializeClient() {
+    initializeAdministrator() {
         const ipAddress = '127.0.0.1';
         const socket = new net.Socket();
 
         socket.connect(this.PORT, ipAddress, () => {
-            console.log('Connected to server');
+            console.log('Admin Listening');
             this.mode = "Registration";
-            const M1 = this.mode+" "+this.ID;
+            this.challenge = this.generateChallenge();
+            const message_1 = this.challenge.join(' ');
+            console.log(message_1);
             // Send Type1 message to the Administrator
             const message1 = {
-                type: 'Type1',
-                content: M1
+                type: 'Type6',
+                content: message_1
             };
             this.sendMessage(socket, message1);
         });
 
         socket.on('data', (data) => {
             const receivedMessage = JSON.parse(data.toString());
-            this.handleServerMessage(socket, receivedMessage);
+            this.handleSensorMessage(socket, receivedMessage);
         });
 
         socket.on('end', () => {
@@ -209,48 +213,81 @@ class Client {
             return null;
         }
     }
+    generateChallenge() {
+        // In a real PUF system, the challenge would be obtained from the hardware
+        const challenge = crypto.randomBytes(16); // Adjust the size as needed
+        return Array.from(challenge);
+    }
     hash(message) {
         const hash = crypto1.SHA256(message);
         return BigInt('0x' + hash.toString(crypto1.enc.Hex));
     }
-    handleServerMessage(socket, message) {
+    async handleSensorMessage(socket, message) {
         console.log(`Received message from Administrator: ${JSON.stringify(message)}`);
 
         // Check the type of message and execute the corresponding logic
         switch (message.type) {
-            case 'Type2':
-                this.processType2Message(socket, message.content);
+            case 'Type7':
+                this.processType7Message(socket, message.content);
                 break;
-            case 'Type4':
-                this.processType4Message(socket, message.content);
+            case 'Type9':
+                this.processType9Message(socket, message.content);
                 break;
             default:
                 console.log(`Unknown message type: ${message.type}`);
         }
     }
+    generatePseudoIdentity() {
+        const pseudoIdentity = crypto.randomBytes(16).toString('hex');
+        return pseudoIdentity;
+             }
 
-    processType2Message(socket, content) {
+        // Function to generate a gateway secret
+    generateGatewaySecret() {
+        const gatewaySecret = crypto.randomBytes(32).toString('hex');
+        return gatewaySecret;
+        }
+
+    async processType7Message(socket, content) {
         // Process Type2 message content
         console.log(`Processing Type2 message: ${content}`);
-        const challenge = this.convertNumbersStringToByteArray(content);
-        const response = this.generateResponse(challenge);
-        const ans = response.join(' ');
-        console.log(ans);
-        const fuzzyExtractor = new FuzzyExtractor(16, 4, 0.001);
-        const keyAndHelper = fuzzyExtractor.generate(response);
-        const S1 = Buffer.from(keyAndHelper.key).toString('utf-8');
-        const alpha = this.hash(S1 + this.ID);
-        const Ru = response.toString();
-        const Message_2 = alpha + " " + Ru;
+        const Message_2 = content.split(' '); 
+        this.ID = Message_2[0];
+        this.response = Message_2[1];
+        const g = this.hash(this.ID+this.response);
+        const g1 = ethers.BigNumber.from(g);
+        //////////Blockchain Network///////////
+        const SensorContract = await ethers.getContractFactory("Sensor");
+        const lock= await SensorContract.deploy()
+        const txReceipt = await lock.deployTransaction.wait();
+        this.TH3 = txReceipt.transactionHash;
+        const blockNumber = txReceipt.blockNumber;
+        const contractCreator = txReceipt.from;
+        this.CA= lock.address;
+        const transactionFee = ethers.utils.formatEther(txReceipt.gasUsed.mul(lock.deployTransaction.gasPrice));
+        const gasUsed = txReceipt.gasUsed.toString();
+        console.log('Transaction Hash:', this.TH3);
+        console.log('Contract Address:', this.CA);
+        const [deployer] = await ethers.getSigners();
+        const contract = await ethers.getContractAt('Sensor', this.CA, deployer);
+       //  const t1 = ethers.BigNumber.from(t);
+        const gString = g.toString();
+        const tx = await contract.addUnD(g1);
+        const receipt = await tx.wait();
+        this.TH4 = receipt.transactionHash;
+        console.log(this.TH4);
+        const PI = this.generatePseudoIdentity();
+        const GS = this.generateGatewaySecret();
+        const Message_3 = this.TH4+" "+this.CA+" "+PI+" "+GS;
         // Send Type3 message to the Administrator
         const message3 = {
-            type: 'Type3',
-            content: Message_2
+            type: 'Type9',
+            content: Message_3
         };
         this.sendMessage(socket, message3);
     }
 
-    processType4Message(socket, content) {
+    processType9Message(socket, content) {
         // Process Type4 message content
         console.log(`Processing Type4 message: ${content}`);
         const parts = content.split(' ');
@@ -275,4 +312,4 @@ class Client {
 }
 
 // Create an instance of the Client
-const client = new Client();
+const administrator = new Administrator();

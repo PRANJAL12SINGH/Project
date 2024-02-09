@@ -4,152 +4,6 @@ const net = require('net');
 const hre = require("hardhat");
 const { ethers, run, network } = require("hardhat")
 
-class Administrator {
-    constructor() {
-        this.PORT = 1000;
-        this.initializeServer();
-    }
-
-    initializeServer() {
-        const server = net.createServer((socket) => {
-            socket.on('data', (data) => {
-                this.handleClientData(socket, data.toString());
-            });
-
-            socket.on('end', () => {
-                console.log('Client disconnected');
-            });
-        });
-
-        server.listen(this.PORT, () => {
-            console.log(`Server listening on port ${this.PORT}`);
-        });
-    }
-
-   async handleClientData(socket, data) {
-        try {
-            const input = data.trim();
-            const Message_1 = input.split(' ');
-            const mode = Message_1[0];
-            const user_id = Message_1[1];
-            console.log(`${mode} ${user_id}`);
-
-            //%%%%%%%%%%%%%%%%%%%%%%%%%%%   Message 2   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            const challenge = this.generateChallenge();
-            const message_2 = challenge.join(' ');
-            console.log(message_2);
-            await socket.write(message_2 + '\n');
-            console.log("1!!!");
-
-            ///Fuzzy/////
-            
-            //////////////Fuzzy///////////  
-            ////////////////Hash//////////////////
-            // function hash(message) {
-            //     // getInstance() method is called with algorithm SHA-256
-            //     const md = require('crypto').createHash('sha256');
-            
-            //     // digest() method is called
-            //     // to calculate the message digest of the input string
-            //     // returned as an array of byte
-            //     const messageDigest = md.update(message).digest();
-            
-            //     // Convert the byte array into a hexadecimal representation
-            //     const hashtext = messageDigest.toString('hex');
-            
-            //     // Add preceding 0s to make it 32 bits
-            //     return hashtext.padStart(32, '0');
-            // } 
-
-            function hash(message) {
-                const hash = crypto1.SHA256(message);
-                return BigInt('0x' + hash.toString(crypto1.enc.Hex));
-            }
-            //%%%%%%%%%%%%%%%%%%%%%%%%%%%   Message 3   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
-            const input2 =  data.trim(); // await this.readFromSocket(socket);
-            const Message_3 = input2.split(' '); 
-            const alpha = Message_3[0];
-            console.log('CHeck');
-            console.log(input2);
-            console.log(alpha);
-            const Ru = Message_3[1];
-            const t = hash(Ru);
-            console.log(t);
-            console.log(alpha);
-            console.log("111");
-            
-            
-            //////////////Blockchain Interaction///////////////////////
-            // const IoTContract = await ethers.getContractFactory("IoT");
-            // const lock= await IoTContract.deploy()
-            // const txReceipt = await lock.deployTransaction.wait();
-            // const transactionHash = txReceipt.transactionHash;
-            // const blockNumber = txReceipt.blockNumber;
-            // const contractCreator = txReceipt.from;
-            // const CA= lock.address;
-            // const transactionFee = ethers.utils.formatEther(txReceipt.gasUsed.mul(lock.deployTransaction.gasPrice));
-            // const gasUsed = txReceipt.gasUsed.toString();
-            // console.log('Transaction Hash:', transactionHash);
-            // console.log('Contract Address:', CA);
-
-            // /////////////////V/////////////////////////////////
-            // const [deployer] = await ethers.getSigners();
-            // const contract = await ethers.getContractAt('IoT', contractAddress, deployer);
-            // const t1 = ethers.BigNumber.from(t);
-            // const tx = await contract.addUnD(t1, t1);
-            // console.log('Hi');
-            // const receipt = await tx.wait();
-            // const TH2 = receipt.transactionHash;
-            // // //////////////////M4//////////////////////////////
-            // console.log('Transaction Hash:', TH2);
-            //////////////////////Message///////////////////////
-            // Function to generate a pseudo-identity
-            // function generatePseudoIdentity() {
-            // const pseudoIdentity = crypto.randomBytes(16).toString('hex');
-            // return pseudoIdentity;
-            //      }
-  
-            // // Function to generate a gateway secret
-            // function generateGatewaySecret() {
-            // const gatewaySecret = crypto.randomBytes(32).toString('hex');
-            // return gatewaySecret;
-            // }
-            // const PI = generatePseudoIdentity();
-            // const GS = generateGatewaySecret();
-            // const Message_5 = TH2+" "+CA+" "+PI+" "+GS;
-            // socket.write(Message_5 + '\n');
-            // console.log(
-            // ` deployed to ${bcontract.target}`
-            // );
-            
-
-        } finally {
-            socket.end();
-        }
-    }
-
-    async readFromSocket(socket) {
-        return new Promise((resolve) => {
-            let data = '';
-    
-            socket.on('data', (chunk) => {
-                data += chunk.toString();
-            });
-    
-            socket.on('end', () => {
-                resolve(data.trim());
-            });
-        });
-    }
-
-    // PUF Challenge
-    generateChallenge() {
-        // In a real PUF system, the challenge would be obtained from the hardware
-        const challenge = crypto.randomBytes(16); // Adjust the size as needed
-        return Array.from(challenge);
-    }
-}
-
 class FuzzyExtractor {
 
     constructor(length, hamErr, repErr) {
@@ -300,5 +154,148 @@ async function main() {
         console.error(error);
     }
 }
+class Administrator {
+    constructor() {
+        this.PORT = 1000;
+        this.ID = "";
+        this.initializeServer();
+        this.challenge="";
+        this.response="";
+        this.alpha="";
+    }
 
-main();
+    initializeServer() {
+        const server = net.createServer((socket) => {
+            socket.on('data', (data) => {
+                const receivedMessage = JSON.parse(data.toString());
+                this.handleClientMessage(socket, receivedMessage);
+            });
+
+            socket.on('end', () => {
+                console.log('Client disconnected');
+            });
+        });
+
+        server.listen(this.PORT, () => {
+            console.log(`Server listening on port ${this.PORT}`);
+        });
+    }
+
+    async handleClientMessage(socket, message) {
+        //console.log(`Received message from Client: ${JSON.stringify(message)}`);
+        
+        // Check the type of message and execute the corresponding logic
+        switch (message.type) {
+            case 'Type1':
+                this.processType1Message(socket, message.content);
+                break;
+            case 'Type3':
+                this.processType3Message(socket, message.content);
+                break;
+            default:
+                console.log(`Unknown message type: ${message.type}`);
+        }
+    }
+    hash(message) {
+        const hash = crypto1.SHA256(message);
+        return BigInt('0x' + hash.toString(crypto1.enc.Hex));
+    }
+    processType1Message(socket, content) {
+        // Process Type1 message content
+       // console.log(`Processing Type1 message: ${content}`);
+        const parts = content.split(' ');
+        const mode = parts[0];
+        this.ID = parts[1];
+        console.log(mode);
+        console.log(this.ID);
+        // Prepare response
+        this.challenge = this.generateChallenge();
+        const message_2 = this.challenge.join(' ');
+        console.log(message_2);
+        // PUF Challenge
+        const responseMessage = {
+            type: 'Type2',
+            content: message_2
+        };
+
+        // Send response back to the Client
+        this.sendMessage(socket, responseMessage);
+    }
+
+    generatePseudoIdentity() {
+            const pseudoIdentity = crypto.randomBytes(16).toString('hex');
+            return pseudoIdentity;
+                 }
+  
+            // Function to generate a gateway secret
+    generateGatewaySecret() {
+            const gatewaySecret = crypto.randomBytes(32).toString('hex');
+            return gatewaySecret;
+            }
+    async processType3Message(socket, content) {
+        // Process Type3 message content
+        console.log(`Processing Type3 message: ${content}`);
+        const Message_3 = content.split(' '); 
+        this.alpha = Message_3[0];
+        this.response = Message_3[1];
+        const t = this.hash(this.Ru);
+        // const alpha1 = BigInt(this.alpha);
+        // console.log(this.alpha);
+        // console.log(alpha1);
+        const alpha1 = ethers.BigNumber.from(this.alpha);
+        const t1 = ethers.BigNumber.from(t);
+        console.log('Alpha:',alpha1);
+        console.log('T:',t1);
+        //////////Blockchain Network///////////
+        const IoTContract = await ethers.getContractFactory("IoT");
+        const lock= await IoTContract.deploy()
+        const txReceipt = await lock.deployTransaction.wait();
+        const transactionHash = txReceipt.transactionHash;
+        const blockNumber = txReceipt.blockNumber;
+        const contractCreator = txReceipt.from;
+        const CA= lock.address;
+        const transactionFee = ethers.utils.formatEther(txReceipt.gasUsed.mul(lock.deployTransaction.gasPrice));
+        const gasUsed = txReceipt.gasUsed.toString();
+        console.log('Transaction Hash:', transactionHash);
+        console.log('Contract Address:', CA);
+
+         const [deployer] = await ethers.getSigners();
+         const contract = await ethers.getContractAt('IoT', CA, deployer);
+        //  const t1 = ethers.BigNumber.from(t);
+         const tString = t.toString();
+         const tx = await contract.addUnD(alpha1, t1);
+         const receipt = await tx.wait();
+         const TH2 = receipt.transactionHash;
+
+        // //////////////////M4//////////////////////////////
+            console.log('Transaction Hash2:', TH2);
+
+            const PI = this.generatePseudoIdentity();
+            const GS = this.generateGatewaySecret();
+            const Message_5 = TH2+" "+CA+" "+PI+" "+GS;
+        // Prepare response
+        const responseMessage = {
+            type: 'Type4',
+            content: Message_5
+        };
+
+        // Send response back to the Client
+        this.sendMessage(socket, responseMessage);
+    }
+
+    
+    
+    sendMessage(socket, message) {
+        // Send the message object to the Client
+        socket.write(JSON.stringify(message) + '\n');
+        console.log(`Sent message to Client: ${JSON.stringify(message)}`);
+    }
+    generateChallenge() {
+        // In a real PUF system, the challenge would be obtained from the hardware
+        const challenge = crypto.randomBytes(16); // Adjust the size as needed
+        return Array.from(challenge);
+    }
+}
+
+// Create an instance of the Administrator
+const administrator = new Administrator();

@@ -1,6 +1,8 @@
-const net = require('net');
 const crypto = require('crypto');
 const crypto1 = require('crypto-js');
+const net = require('net');
+const hre = require("hardhat");
+const { ethers, run, network } = require("hardhat")
 
 class FuzzyExtractor {
 
@@ -142,43 +144,65 @@ class FuzzyExtractor {
         this.key = key;
         this.publicHelper = publicHelper;
     }
+    
 }
-class Client {
+
+async function main() {
+    try {
+        const AS = new Sensor();
+    } catch (error) {
+        console.error(error);
+    }
+}
+class Sensor{
     constructor() {
         this.PORT = 1000;
-        this.ID = "USER1";
-        this.mode = "";
+        this.ID = "";
+        this.initializeServer();
+        this.challenge="";
+        this.response="";
+        this.alpha="";
         this.TH2 = "";
         this.CA = "";
         this.PI = "";
         this.GS = "";
-        this.initializeClient();
     }
 
-    initializeClient() {
-        const ipAddress = '127.0.0.1';
-        const socket = new net.Socket();
+    initializeServer() {
+        const server = net.createServer((socket) => {
+            socket.on('data', (data) => {
+                const receivedMessage = JSON.parse(data.toString());
+                this.handleClientMessage(socket, receivedMessage);
+            });
 
-        socket.connect(this.PORT, ipAddress, () => {
-            console.log('Connected to server');
-            this.mode = "Registration";
-            const M1 = this.mode+" "+this.ID;
-            // Send Type1 message to the Administrator
-            const message1 = {
-                type: 'Type1',
-                content: M1
-            };
-            this.sendMessage(socket, message1);
+            socket.on('end', () => {
+                console.log('Admin disconnected');
+            });
         });
 
-        socket.on('data', (data) => {
-            const receivedMessage = JSON.parse(data.toString());
-            this.handleServerMessage(socket, receivedMessage);
+        server.listen(this.PORT, () => {
+            console.log(`Sensor listening on port ${this.PORT}`);
         });
+    }
 
-        socket.on('end', () => {
-            console.log('Connection closed');
-        });
+    async handleClientMessage(socket, message) {
+        //console.log(`Received message from Client: ${JSON.stringify(message)}`);
+        
+        // Check the type of message and execute the corresponding logic
+        switch (message.type) {
+            case 'Type6':
+                this.processType1Message(socket, message.content);
+                break;
+            case 'Type9':
+                this.processType3Message(socket, message.content);
+                break;
+            default:
+                console.log(`Unknown message type: ${message.type}`);
+        }
+    }
+    hash(message) {
+        const hash = crypto1.SHA256(message);
+        return BigInt('0x' + hash.toString(crypto1.enc.Hex));
     }
     convertNumbersStringToByteArray(numbersString) {
         const numberStrings = numbersString.split(/\s+/); // Split by one or more spaces
@@ -209,49 +233,37 @@ class Client {
             return null;
         }
     }
-    hash(message) {
-        const hash = crypto1.SHA256(message);
-        return BigInt('0x' + hash.toString(crypto1.enc.Hex));
-    }
-    handleServerMessage(socket, message) {
-        console.log(`Received message from Administrator: ${JSON.stringify(message)}`);
-
-        // Check the type of message and execute the corresponding logic
-        switch (message.type) {
-            case 'Type2':
-                this.processType2Message(socket, message.content);
-                break;
-            case 'Type4':
-                this.processType4Message(socket, message.content);
-                break;
-            default:
-                console.log(`Unknown message type: ${message.type}`);
-        }
-    }
-
-    processType2Message(socket, content) {
-        // Process Type2 message content
-        console.log(`Processing Type2 message: ${content}`);
-        const challenge = this.convertNumbersStringToByteArray(content);
-        const response = this.generateResponse(challenge);
-        const ans = response.join(' ');
-        console.log(ans);
-        const fuzzyExtractor = new FuzzyExtractor(16, 4, 0.001);
-        const keyAndHelper = fuzzyExtractor.generate(response);
-        const S1 = Buffer.from(keyAndHelper.key).toString('utf-8');
-        const alpha = this.hash(S1 + this.ID);
-        const Ru = response.toString();
-        const Message_2 = alpha + " " + Ru;
-        // Send Type3 message to the Administrator
-        const message3 = {
-            type: 'Type3',
-            content: Message_2
+    processType6Message(socket, content) {
+        // Process Type1 message content
+       // console.log(`Processing Type1 message: ${content}`);
+       const challenge = this.convertNumbersStringToByteArray(content);
+       const response = this.generateResponse(challenge);
+       const ans = response.join(' ');
+       const Ru = response.toString();
+       this.ID = 'Sensor1'
+       const message_1 = this.ID+" "+Ru;
+        // PUF Challenge
+        const responseMessage = {
+            type: 'Type7',
+            content: message_1
         };
-        this.sendMessage(socket, message3);
+
+        // Send response back to the Client
+        this.sendMessage(socket, responseMessage);
     }
 
-    processType4Message(socket, content) {
-        // Process Type4 message content
+    generatePseudoIdentity() {
+            const pseudoIdentity = crypto.randomBytes(16).toString('hex');
+            return pseudoIdentity;
+                 }
+  
+            // Function to generate a gateway secret
+    generateGatewaySecret() {
+            const gatewaySecret = crypto.randomBytes(32).toString('hex');
+            return gatewaySecret;
+            }
+    async processType9Message(socket, content) {
+        // Process Type3 message content
         console.log(`Processing Type4 message: ${content}`);
         const parts = content.split(' ');
         this.TH2 = parts[0];
@@ -263,16 +275,22 @@ class Client {
         console.log(this.CA);
         console.log(this.PI);
         console.log(this.GS);
-        // Close the connection
         socket.end();
     }
 
+    
+    
     sendMessage(socket, message) {
-        // Send the message object to the Administrator
+        // Send the message object to the Client
         socket.write(JSON.stringify(message) + '\n');
-        console.log(`Sent message to Administrator: ${JSON.stringify(message)}`);
+        console.log(`Sent message to Client: ${JSON.stringify(message)}`);
+    }
+    generateChallenge() {
+        // In a real PUF system, the challenge would be obtained from the hardware
+        const challenge = crypto.randomBytes(16); // Adjust the size as needed
+        return Array.from(challenge);
     }
 }
 
-// Create an instance of the Client
-const client = new Client();
+// Create an instance of the Administrator
+const sensor = new Sensor();
